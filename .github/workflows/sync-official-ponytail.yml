@@ -1,0 +1,35 @@
+name: Sync official Ponytail
+
+on:
+  schedule:
+    - cron: '17 0 * * *' # 08:17 Hong Kong
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/sync-official-ponytail.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-official-ponytail
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'labnnine/ponytail' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Merge official main and verify its commit is included
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream=$(gh api repos/DietrichGebert/ponytail/commits/main --jq '.sha')
+          gh api --silent --method POST "repos/$GITHUB_REPOSITORY/merges" \
+            -f base=main -f head="$upstream" -f commit_message="Sync official Ponytail main"
+          missing=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$upstream" --jq '.ahead_by')
+          test "$missing" = 0
+          echo "Verified main includes official commit $upstream" >> "$GITHUB_STEP_SUMMARY"
